@@ -58,6 +58,33 @@ export default function App() {
   });
 
   const [isCustomerLoginOpen, setIsCustomerLoginOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBanner(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      console.log('User accepted the install prompt');
+    }
+    setDeferredPrompt(null);
+    setShowInstallBanner(false);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -267,6 +294,40 @@ export default function App() {
             <Route path="/admin/*" element={user?.role === 'admin' ? <AdminDashboard handleLogout={handleLogout} /> : <AdminLogin setUser={setUser} />} />
           </Routes>
         </main>
+
+        {/* Install Banner */}
+        <AnimatePresence>
+          {showInstallBanner && (
+            <motion.div 
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="fixed bottom-24 left-4 right-4 z-[60] md:bottom-8 md:right-8 md:left-auto md:w-80"
+            >
+              <div className="bg-accent text-white p-6 rounded-[2rem] shadow-2xl border border-white/10 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-2">
+                  <button onClick={() => setShowInstallBanner(false)} className="p-1 hover:bg-white/10 rounded-full">
+                    <X className="h-4 w-4 text-white/50" />
+                  </button>
+                </div>
+                <div className="flex items-center space-x-4 mb-4">
+                  <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-white font-bold text-xl italic shadow-lg">T</div>
+                  <div>
+                    <h4 className="font-serif font-bold text-lg">Install Tai Hub</h4>
+                    <p className="text-white/40 text-[10px] uppercase font-bold tracking-widest">Get the best experience</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={handleInstallClick}
+                  className="w-full py-3 bg-primary text-white rounded-xl font-bold hover:bg-primary/80 transition-all flex items-center justify-center space-x-2"
+                >
+                  <ShoppingBag className="h-4 w-4" />
+                  <span>Add to Home Screen</span>
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <CustomerLoginModal 
           isOpen={isCustomerLoginOpen}
