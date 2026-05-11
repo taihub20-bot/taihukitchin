@@ -1,0 +1,6 @@
+{
+  "name": "Tai Hub",
+  "description": "A high-end restaurant e-commerce platform with WhatsApp ordering, secure payments, real-time location sharing, and comprehensive admin management.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["Authentication", "Database", "Payments", "Geolocation"]
+}
