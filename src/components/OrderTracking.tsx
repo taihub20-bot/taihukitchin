@@ -67,14 +67,30 @@ export default function OrderTracking() {
 
   useEffect(() => {
     if (order?.id) {
+      // 1. Local Polling for non-supabase environments
+      const interval = setInterval(async () => {
+        try {
+          const allOrders = await dataService.getOrders();
+          const found = allOrders.find(o => o.id === order.id);
+          if (found && found.status !== order.status) {
+            setOrder(found);
+          }
+        } catch (e) {
+          console.error("Polling error", e);
+        }
+      }, 3000);
+
+      // 2. Supabase Real-time Subscription
       const sub = dataService.subscribeToOrderUpdates(order.id, (updatedOrder) => {
         setOrder(updatedOrder);
       });
+
       return () => {
+        clearInterval(interval);
         if (sub) sub.unsubscribe();
       };
     }
-  }, [order?.id]);
+  }, [order?.id, order?.status]);
 
   const handleTrack = async (e: React.FormEvent) => {
     e.preventDefault();

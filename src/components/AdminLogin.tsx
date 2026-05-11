@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, Loader2, ArrowRight, Github, Chrome } from 'lucide-react';
+import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { User } from '../types';
+import { dataService } from '../services/dataService';
 
 interface AdminLoginProps {
   setUser: (user: User) => void;
@@ -21,22 +22,11 @@ export default function AdminLogin({ setUser }: AdminLoginProps) {
     setError('');
 
     try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-
-      if (res.ok) {
-        const user = await res.json();
-        setUser(user);
-        navigate('/admin');
-      } else {
-        const data = await res.json();
-        setError(data.error || 'Login failed');
-      }
-    } catch (err) {
-      setError('Connection error. Please try again.');
+      const user = await dataService.login({ email, password });
+      setUser(user);
+      navigate('/admin');
+    } catch (err: any) {
+      setError(err.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }

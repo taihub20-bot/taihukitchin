@@ -19,7 +19,8 @@ import {
   Home as HomeIcon,
   UtensilsCrossed,
   UserCircle,
-  LogOut
+  LogOut,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
@@ -75,6 +76,26 @@ export default function App() {
       localStorage.setItem('customerLoggedIn', 'true');
     }
   }, [customerInfo]);
+
+  useEffect(() => {
+    const handleStorage = () => {
+      const saved = localStorage.getItem('customerInfo');
+      if (saved) {
+        setCustomerInfo(JSON.parse(saved));
+      } else {
+        setCustomerInfo(null);
+      }
+      
+      const savedUser = localStorage.getItem('user');
+      if (savedUser) {
+        setUser(JSON.parse(savedUser));
+      } else {
+        setUser(null);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
@@ -350,12 +371,22 @@ function HomeOverview() {
 function MenuSection({ addToCart, searchQuery }: { addToCart: (p: Product) => void, searchQuery: string }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { t } = useTranslation();
 
   useEffect(() => {
+    setLoading(true);
     dataService.getProducts()
-      .then(data => setProducts(data))
-      .catch(err => console.error("Failed to fetch products", err));
+      .then(data => {
+        setProducts(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Failed to fetch products", err);
+        setError(err.message || "Failed to load products");
+        setLoading(false);
+      });
 
     // Real-time subscription for customer menu
     const sub = dataService.subscribeToProducts(() => {
@@ -397,14 +428,44 @@ function MenuSection({ addToCart, searchQuery }: { addToCart: (p: Product) => vo
       </div>
 
       <AnimatePresence mode="wait">
-        <motion.div 
-          layout
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
-        >
-          {filteredProducts.map(product => (
-            <ProductCard key={product.id} product={product} addToCart={addToCart} />
-          ))}
-        </motion.div>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-40 bg-accent/5 rounded-[4rem]">
+            <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+            <p className="text-accent/30 font-bold uppercase tracking-widest">Loading Tai Menu...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-40 bg-red-50 rounded-[4rem] border-2 border-red-100 p-8">
+            <X className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-red-700 mb-2">Could Not Load Menu</h3>
+            <p className="text-red-500/70 mb-6">{error}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-8 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-all"
+            >
+              Retry Connection
+            </button>
+            {window.location.hostname.includes('netlify.app') && (
+              <div className="mt-8 p-6 bg-blue-50/50 rounded-3xl border border-blue-100 text-left">
+                <h4 className="text-blue-700 font-bold text-xs mb-2 uppercase tracking-widest">Netlify Guide</h4>
+                <p className="text-blue-600/70 text-[10px] leading-relaxed">
+                  Apka menu is se liyei nhi load ho raha kyu ki Netlify mei database connect nhi hei. <br/>
+                  1. Supabase mei account banaye.<br/>
+                  2. <b>setup_supabase.sql</b> run krein table banane k liyei.<br/>
+                  3. Netlify environment variables mei <b>VITE_SUPABASE_URL</b> or <b>VITE_SUPABASE_ANON_KEY</b> add krein.
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <motion.div 
+            layout
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
+          >
+            {filteredProducts.map(product => (
+              <ProductCard key={product.id} product={product} addToCart={addToCart} />
+            ))}
+          </motion.div>
+        )}
       </AnimatePresence>
       
       {filteredProducts.length === 0 && (

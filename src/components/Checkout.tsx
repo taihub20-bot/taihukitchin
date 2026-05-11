@@ -71,6 +71,7 @@ export default function Checkout({ items, clearCart }: CheckoutProps) {
       localStorage.setItem('customerInfo', JSON.stringify(formData));
       localStorage.setItem('customerLoggedIn', 'true');
       setIsCustomerLoggedIn(true);
+      window.dispatchEvent(new Event('storage'));
     } else {
       alert("Please provide your name and at least a Phone number or Email.");
     }

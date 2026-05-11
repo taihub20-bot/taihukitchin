@@ -1,7 +1,12 @@
-import { Product, Order } from '../types';
+import { Product, Order, User } from '../types';
 import { supabase } from '../lib/supabase';
 
-const isSupabaseEnabled = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY && supabase);
+const isSupabaseEnabled = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+const isNetlify = typeof window !== 'undefined' && window.location.hostname.includes('netlify.app');
+
+if (isNetlify && !isSupabaseEnabled) {
+  console.error("CRITICAL: Running on Netlify but Supabase keys are missing! Database will not work.");
+}
 
 async function handleResponse(res: Response) {
   if (!res.ok) {
@@ -182,5 +187,28 @@ export const dataService = {
         .subscribe();
     }
     return null;
+  },
+
+  async login(credentials: any): Promise<User> {
+    if (isSupabaseEnabled) {
+      const { data, error } = await supabase
+        .from('admins')
+        .select('*')
+        .eq('email', credentials.email)
+        .eq('password', credentials.password)
+        .single();
+      
+      if (error || !data) {
+        throw new Error('Invalid email or password');
+      }
+      return data;
+    } else {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials)
+      });
+      return handleResponse(res);
+    }
   }
 };

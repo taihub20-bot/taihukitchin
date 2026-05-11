@@ -19,7 +19,8 @@ import {
   X,
   Menu,
   Check,
-  Ban
+  Ban,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, Order } from '../types';
@@ -48,11 +49,15 @@ export default function AdminDashboard({ handleLogout }: { handleLogout: () => v
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 10000); 
+    const interval = setInterval(fetchData, 3000); 
     
     // Real-time subscription for orders
     const orderSub = dataService.subscribeToOrders((newOrder) => {
-      setOrders(prev => [newOrder, ...prev]);
+      setOrders(prev => {
+        // Prevent duplicate if polling also caught it
+        if (prev.some(o => o.id === newOrder.id)) return prev;
+        return [newOrder, ...prev];
+      });
       setNewOrderNotify(newOrder);
       try {
         const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
@@ -61,9 +66,13 @@ export default function AdminDashboard({ handleLogout }: { handleLogout: () => v
     });
 
     // Real-time subscription for products
-    const productSub = dataService.subscribeToProducts(() => {
-      // Refresh products list for any change
-      dataService.getProducts().then(setProducts).catch(console.error);
+    const productSub = dataService.subscribeToProducts((updatedProduct) => {
+      if (updatedProduct) {
+        setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+      } else {
+        // Fallback or delete case
+        dataService.getProducts().then(setProducts).catch(console.error);
+      }
     });
 
     return () => {
@@ -153,6 +162,8 @@ export default function AdminDashboard({ handleLogout }: { handleLogout: () => v
     }
   };
 
+  const [error, setError] = useState<string | null>(null);
+
   const fetchData = async () => {
     try {
       const [o, p] = await Promise.all([
@@ -161,8 +172,10 @@ export default function AdminDashboard({ handleLogout }: { handleLogout: () => v
       ]);
       setOrders(o);
       setProducts(p);
+      setError(null);
     } catch (e) {
       console.error("Fetch error", e);
+      setError(e instanceof Error ? e.message : "Failed to connect to database");
     } finally {
       setLoading(false);
     }
@@ -215,6 +228,52 @@ export default function AdminDashboard({ handleLogout }: { handleLogout: () => v
     { label: "Orders", value: orders.filter(o => new Date(o.createdAt).toDateString() === new Date().toDateString()).length, icon: ShoppingBag, delta: "+4", positive: true },
     { label: "Sold", value: orders.reduce((acc, o) => acc + (o.status !== 'rejected' ? o.items.reduce((a, i) => a + i.quantity, 0) : 0), 0), icon: Package, delta: "-2%", positive: false },
   ];
+
+  if (loading && orders.length === 0) {
+    return (
+      <div className="min-h-screen bg-accent flex flex-col items-center justify-center p-8">
+        <Loader2 className="h-12 w-12 text-primary animate-spin mb-6" />
+        <h2 className="text-2xl font-serif font-bold text-white mb-2">Connecting to Hub...</h2>
+        <p className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Verifying Database Connection</p>
+      </div>
+    );
+  }
+
+  if (error && orders.length === 0) {
+    return (
+      <div className="min-h-screen bg-accent flex flex-col items-center justify-center p-8 text-center">
+        <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-8 border border-red-500/20">
+          <Ban className="h-10 w-10 text-red-500" />
+        </div>
+        <h2 className="text-3xl font-serif font-bold text-white mb-4">Database Connection Error</h2>
+        <div className="max-w-md p-6 bg-white/5 rounded-3xl border border-white/10 mb-8">
+          <p className="text-red-400 font-mono text-xs break-all">{error}</p>
+        </div>
+        <div className="space-y-4">
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full px-12 py-4 bg-primary text-white rounded-2xl font-bold hover:bg-primary/80 transition-all shadow-xl shadow-primary/20"
+          >
+            Retry Connection
+          </button>
+          <button 
+            onClick={handleLogout}
+            className="w-full px-12 py-4 bg-white/5 text-white rounded-2xl font-bold hover:bg-white/10 transition-all"
+          >
+            Switch Account
+          </button>
+        </div>
+        {window.location.hostname.includes('netlify.app') && (
+          <div className="mt-12 p-6 bg-blue-500/10 rounded-3xl border border-blue-500/20 text-left max-w-lg">
+             <h4 className="text-blue-400 font-bold text-sm mb-2 uppercase tracking-widest">Netlify Hosting Tip</h4>
+             <p className="text-white/60 text-xs leading-relaxed">
+               If you are seeing this on Netlify, please ensure you have added your Supabase URL and Key to the <b>Site Settings and Environment Variables</b> section in your Netlify dashboard.
+             </p>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col md:flex-row relative">
