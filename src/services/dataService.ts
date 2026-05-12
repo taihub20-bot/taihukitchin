@@ -1,214 +1,158 @@
-import { Product, Order, User } from '../types';
 import { supabase } from '../lib/supabase';
-
-const isSupabaseEnabled = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
-const isNetlify = typeof window !== 'undefined' && window.location.hostname.includes('netlify.app');
-
-if (isNetlify && !isSupabaseEnabled) {
-  console.error("CRITICAL: Running on Netlify but Supabase keys are missing! Database will not work.");
-}
-
-async function handleResponse(res: Response) {
-  if (!res.ok) {
-    let errorMsg = `Server error: ${res.status}`;
-    try {
-      const errorData = await res.json();
-      errorMsg = errorData.error || errorMsg;
-    } catch (e) {
-      // If it's not JSON (e.g. an HTML error page), we'll stick to the status code
-      const text = await res.text();
-      if (text.includes("Payload Too Large")) {
-        errorMsg = "The image or data you are trying to save is too large. Please use a smaller image.";
-      } else if (text.startsWith("<!DOCTYPE")) {
-        errorMsg = `Server returned an error page (Status: ${res.status}). This often happens when a route is missing or the server crashes.`;
-      }
-    }
-    throw new Error(errorMsg);
-  }
-  
-  const contentType = res.headers.get("content-type");
-  if (contentType && contentType.includes("application/json")) {
-    return res.json();
-  }
-  return null;
-}
+import { Product, Order, User } from '../types';
 
 export const dataService = {
   // Products
   async getProducts(): Promise<Product[]> {
-    if (isSupabaseEnabled) {
-      const { data, error } = await supabase.from('products').select('*');
-      if (error) throw error;
-      return data || [];
-    } else {
-      const res = await fetch('/api/products');
-      return handleResponse(res);
-    }
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('category', { ascending: true });
+    
+    if (error) throw error;
+    return data || [];
   },
 
   async addProduct(product: Partial<Product>): Promise<Product> {
-    if (isSupabaseEnabled) {
-      const { data, error } = await supabase.from('products').insert([product]).select().single();
-      if (error) throw error;
-      return data;
-    } else {
-      const res = await fetch('/api/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(product)
-      });
-      return handleResponse(res);
-    }
+    const { data, error } = await supabase
+      .from('products')
+      .insert([product])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
   },
 
   async updateProduct(id: string, updates: Partial<Product>): Promise<Product> {
-    if (isSupabaseEnabled) {
-      const { data, error } = await supabase.from('products').update(updates).eq('id', id).select().single();
-      if (error) throw error;
-      return data;
-    } else {
-      const res = await fetch(`/api/products/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-      });
-      return handleResponse(res);
-    }
+    const { data, error } = await supabase
+      .from('products')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
   },
 
   async deleteProduct(id: string): Promise<void> {
-    if (isSupabaseEnabled) {
-      const { error } = await supabase.from('products').delete().eq('id', id);
-      if (error) throw error;
-    } else {
-      const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
-      return handleResponse(res);
-    }
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
   },
 
   // Orders
   async getOrders(): Promise<Order[]> {
-    if (isSupabaseEnabled) {
-      const { data, error } = await supabase.from('orders').select('*').order('createdAt', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    } else {
-      const res = await fetch('/api/orders');
-      return handleResponse(res);
-    }
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .order('createdAt', { ascending: false });
+    
+    if (error) throw error;
+    return data || [];
   },
 
   async createOrder(order: Partial<Order>): Promise<Order> {
-    if (isSupabaseEnabled) {
-      // 1. Create the order
-      const { data: newOrder, error: orderError } = await supabase.from('orders').insert([order]).select().single();
-      if (orderError) throw orderError;
-
-      // 2. Decrement inventory for each item
-      if (order.items) {
-        for (const item of order.items) {
-          // In a real app, you'd use a RPC call to ensure atomicity
-          // but for this demo, we'll fetch and update
-          const { data: product } = await supabase.from('products').select('inventory').eq('id', item.id).single();
-          if (product) {
-            await supabase.from('products').update({ 
-              inventory: Math.max(0, product.inventory - item.quantity) 
-            }).eq('id', item.id);
-          }
-        }
-      }
-      
-      return newOrder;
-    } else {
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(order)
-      });
-      return handleResponse(res);
-    }
+    const { data, error } = await supabase
+      .from('orders')
+      .insert([{
+        ...order,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      }])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
   },
 
   async updateOrderStatus(orderId: string, status: string): Promise<Order> {
-    if (isSupabaseEnabled) {
-      const { data, error } = await supabase.from('orders').update({ status }).eq('id', orderId).select().single();
-      if (error) throw error;
-      return data;
-    } else {
-      const res = await fetch(`/api/orders/${orderId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      });
-      return handleResponse(res);
-    }
+    const { data, error } = await supabase
+      .from('orders')
+      .update({ status })
+      .eq('id', orderId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
   },
 
   // Real-time subscriptions
   subscribeToOrders(callback: (order: Order) => void) {
-    if (isSupabaseEnabled) {
-      return supabase
-        .channel('orders-channel')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, payload => {
-          callback(payload.new as Order);
-        })
-        .subscribe();
-    }
-    return null;
+    const subscription = supabase
+      .channel('orders-channel')
+      .on('postgres_changes' as any, { event: '*', table: 'orders' }, (payload: any) => {
+        callback(payload.new as Order);
+      })
+      .subscribe();
+    
+    return subscription;
   },
 
   subscribeToProducts(callback: (product: Product) => void) {
-    if (isSupabaseEnabled) {
-      return supabase
-        .channel('products-channel')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, payload => {
-          // For products, we want to listen to all events (INSERT, UPDATE, DELETE)
-          // but for simplicity in UI, we trigger a refresh or handle specific payload
-          // Here we just pass the new/updated product
-          callback(payload.new as Product);
-        })
-        .subscribe();
-    }
-    return null;
+    const subscription = supabase
+      .channel('products-channel')
+      .on('postgres_changes' as any, { event: '*', table: 'products' }, (payload: any) => {
+        callback(payload.new as Product);
+      })
+      .subscribe();
+    
+    return subscription;
   },
 
   subscribeToOrderUpdates(orderId: string, callback: (order: Order) => void) {
-    if (isSupabaseEnabled) {
-      return supabase
-        .channel(`order-status-${orderId}`)
-        .on('postgres_changes', { 
+    const subscription = supabase
+      .channel(`order-update-${orderId}`)
+      .on('postgres_changes' as any, 
+        { 
           event: 'UPDATE', 
-          schema: 'public', 
-          table: 'orders',
-          filter: `id=eq.${orderId}`
-        }, payload => {
+          table: 'orders', 
+          filter: `id=eq.${orderId}` 
+        }, 
+        (payload: any) => {
           callback(payload.new as Order);
-        })
-        .subscribe();
-    }
-    return null;
+        }
+      )
+      .subscribe();
+    
+    return subscription;
   },
 
-  async login(credentials: any): Promise<User> {
-    if (isSupabaseEnabled) {
-      const { data, error } = await supabase
-        .from('admins')
-        .select('*')
-        .eq('email', credentials.email)
-        .eq('password', credentials.password)
-        .single();
-      
-      if (error || !data) {
-        throw new Error('Invalid email or password');
+  async login(credentials: { email: string, password?: string }): Promise<User> {
+    // Note: For a "Customer Login" with just a phone/email we might use a custom table 
+    // or Supabase Auth. Since the current app uses simple email/password in data.json:
+    
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', credentials.email)
+      .eq('password', credentials.password)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        throw new Error('Invalid credentials');
       }
-      return data;
-    } else {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials)
-      });
-      return handleResponse(res);
+      throw error;
     }
+    
+    return data;
+  },
+
+  async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {
+    const { error } = await supabase
+      .from('users')
+      .update({ password: newPassword })
+      .eq('id', userId)
+      .eq('password', oldPassword);
+    
+    if (error) throw error;
   }
 };
+

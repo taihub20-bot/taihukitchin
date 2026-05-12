@@ -20,7 +20,9 @@ import {
   Menu,
   Check,
   Ban,
-  Loader2
+  Loader2,
+  Settings,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, Order } from '../types';
@@ -28,7 +30,7 @@ import { Product, Order } from '../types';
 import { dataService } from '../services/dataService';
 
 export default function AdminDashboard({ handleLogout }: { handleLogout: () => void }) {
-  const [activeTab, setActiveTab] = useState<'orders' | 'inventory' | 'analytics'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'inventory' | 'analytics' | 'settings'>('orders');
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +38,12 @@ export default function AdminDashboard({ handleLogout }: { handleLogout: () => v
   const [newOrderNotify, setNewOrderNotify] = useState<Order | null>(null);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  
+  // Password change state
+  const [passwordForm, setPasswordForm] = useState({ old: '', new: '', confirm: '' });
+  const [passChangeLoading, setPassChangeLoading] = useState(false);
+  const [passChangeMsg, setPassChangeMsg] = useState<{type: 'success' | 'error', text: string} | null>(null);
+
   const [newProduct, setNewProduct] = useState<Partial<Product>>({
     name: '',
     price: 0,
@@ -49,34 +57,37 @@ export default function AdminDashboard({ handleLogout }: { handleLogout: () => v
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 3000); 
     
     // Real-time subscription for orders
     const orderSub = dataService.subscribeToOrders((newOrder) => {
       setOrders(prev => {
-        // Prevent duplicate if polling also caught it
-        if (prev.some(o => o.id === newOrder.id)) return prev;
-        return [newOrder, ...prev];
+        // Find if it exists
+        const index = prev.findIndex(o => o.id === newOrder.id);
+        if (index !== -1) {
+          // Update existing
+          const updated = [...prev];
+          updated[index] = newOrder;
+          return updated;
+        } else {
+          // Add new
+          if (newOrder.status === 'pending') {
+            setNewOrderNotify(newOrder);
+            try {
+              const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+              audio.play();
+            } catch (e) {}
+          }
+          return [newOrder, ...prev];
+        }
       });
-      setNewOrderNotify(newOrder);
-      try {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        audio.play();
-      } catch (e) {}
     });
 
     // Real-time subscription for products
     const productSub = dataService.subscribeToProducts((updatedProduct) => {
-      if (updatedProduct) {
-        setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
-      } else {
-        // Fallback or delete case
-        dataService.getProducts().then(setProducts).catch(console.error);
-      }
+      fetchData(); // Simpler to refetch for broad consistency
     });
 
     return () => {
-      clearInterval(interval);
       if (orderSub) orderSub.unsubscribe();
       if (productSub) productSub.unsubscribe();
     };
@@ -218,6 +229,38 @@ export default function AdminDashboard({ handleLogout }: { handleLogout: () => v
     setNewOrderNotify(null);
   };
 
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPassChangeMsg(null);
+    
+    if (passwordForm.new !== passwordForm.confirm) {
+      setPassChangeMsg({ type: 'error', text: 'New passwords do not match' });
+      return;
+    }
+    
+    if (passwordForm.new.length < 4) {
+      setPassChangeMsg({ type: 'error', text: 'Password must be at least 4 characters' });
+      return;
+    }
+
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!user.id) {
+      setPassChangeMsg({ type: 'error', text: 'Not logged in' });
+      return;
+    }
+
+    setPassChangeLoading(true);
+    try {
+      await dataService.changePassword(user.id, passwordForm.old, passwordForm.new);
+      setPassChangeMsg({ type: 'success', text: 'Password updated successfully!' });
+      setPasswordForm({ old: '', new: '', confirm: '' });
+    } catch (err: any) {
+      setPassChangeMsg({ type: 'error', text: err.message || 'Failed to update password' });
+    } finally {
+      setPassChangeLoading(false);
+    }
+  };
+
   const handleRejectOrder = (orderId: string) => {
     updateOrderStatus(orderId, 'rejected', true);
     setNewOrderNotify(null);
@@ -233,8 +276,8 @@ export default function AdminDashboard({ handleLogout }: { handleLogout: () => v
     return (
       <div className="min-h-screen bg-accent flex flex-col items-center justify-center p-8">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-6" />
-        <h2 className="text-2xl font-serif font-bold text-white mb-2">Connecting to Hub...</h2>
-        <p className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Verifying Database Connection</p>
+        <h2 className="text-2xl font-serif font-bold text-white mb-2">Connecting to Supabase...</h2>
+        <p className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Establishing Real-time Connection</p>
       </div>
     );
   }
@@ -245,9 +288,17 @@ export default function AdminDashboard({ handleLogout }: { handleLogout: () => v
         <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-8 border border-red-500/20">
           <Ban className="h-10 w-10 text-red-500" />
         </div>
-        <h2 className="text-3xl font-serif font-bold text-white mb-4">Database Connection Error</h2>
-        <div className="max-w-md p-6 bg-white/5 rounded-3xl border border-white/10 mb-8">
-          <p className="text-red-400 font-mono text-xs break-all">{error}</p>
+        <h2 className="text-3xl font-serif font-bold text-white mb-4">Supabase Connection Error</h2>
+        <div className="max-w-md p-6 bg-white/5 rounded-3xl border border-white/10 mb-8 text-left">
+          <p className="text-red-400 font-mono text-xs break-all mb-4">{error}</p>
+          <div className="p-4 bg-primary/10 rounded-xl border border-primary/20">
+            <h4 className="text-primary font-bold text-[10px] uppercase tracking-widest mb-2">Checklist:</h4>
+            <ul className="text-white/60 text-[10px] space-y-1 list-disc pl-4">
+              <li>Are VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY set?</li>
+              <li>Have you created tables: products, orders, users?</li>
+              <li>Is Real-time enabled on these tables?</li>
+            </ul>
+          </div>
         </div>
         <div className="space-y-4">
           <button 
@@ -333,6 +384,13 @@ export default function AdminDashboard({ handleLogout }: { handleLogout: () => v
             >
               <BarChart3 className="h-5 w-5" />
               <span>Analytics</span>
+            </button>
+            <button 
+              onClick={() => { setActiveTab('settings'); setIsSidebarOpen(false); }}
+              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-bold tracking-widest uppercase transition-all ${activeTab === 'settings' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+            >
+              <Settings className="h-5 w-5" />
+              <span>Settings</span>
             </button>
           </nav>
         </div>
@@ -605,6 +663,68 @@ export default function AdminDashboard({ handleLogout }: { handleLogout: () => v
                     </div>
                   </div>
                 )}
+              </motion.div>
+            )}
+
+            {activeTab === 'settings' && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="max-w-md mx-auto py-12">
+                <div className="text-center mb-12">
+                   <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Lock className="h-10 w-10 text-primary" />
+                   </div>
+                   <h2 className="text-3xl font-serif font-bold text-accent tracking-tight">Security Settings</h2>
+                   <p className="text-accent/40 text-[10px] uppercase font-bold tracking-widest mt-2">Manage your credentials</p>
+                </div>
+
+                <form onSubmit={handleChangePassword} className="space-y-6">
+                   {passChangeMsg && (
+                      <div className={`p-4 rounded-xl text-xs font-bold flex items-center space-x-2 ${passChangeMsg.type === 'success' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                         {passChangeMsg.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <X className="h-4 w-4" />}
+                         <span>{passChangeMsg.text}</span>
+                      </div>
+                   )}
+
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-accent/40 uppercase tracking-widest">Old Password</label>
+                      <input 
+                        type="password" 
+                        required
+                        className="w-full px-6 py-4 rounded-2xl bg-accent/5 border border-accent/10 focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
+                        value={passwordForm.old}
+                        onChange={e => setPasswordForm({...passwordForm, old: e.target.value})}
+                      />
+                   </div>
+
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-accent/40 uppercase tracking-widest">New Password</label>
+                      <input 
+                        type="password" 
+                        required
+                        className="w-full px-6 py-4 rounded-2xl bg-accent/5 border border-accent/10 focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
+                        value={passwordForm.new}
+                        onChange={e => setPasswordForm({...passwordForm, new: e.target.value})}
+                      />
+                   </div>
+
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-accent/40 uppercase tracking-widest">Confirm New Password</label>
+                      <input 
+                        type="password" 
+                        required
+                        className="w-full px-6 py-4 rounded-2xl bg-accent/5 border border-accent/10 focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
+                        value={passwordForm.confirm}
+                        onChange={e => setPasswordForm({...passwordForm, confirm: e.target.value})}
+                      />
+                   </div>
+
+                   <button 
+                      type="submit"
+                      disabled={passChangeLoading}
+                      className="w-full py-4 bg-accent text-white rounded-2xl font-bold hover:bg-primary transition-all shadow-xl shadow-accent/10 flex items-center justify-center space-x-2 disabled:opacity-50"
+                   >
+                      {passChangeLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <span>Update Password</span>}
+                   </button>
+                </form>
               </motion.div>
             )}
           </AnimatePresence>

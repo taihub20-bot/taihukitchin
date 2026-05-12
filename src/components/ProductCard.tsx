@@ -1,15 +1,16 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Star, ArrowUpRight } from 'lucide-react';
+import { Plus, Star, ArrowUpRight, ShoppingBag } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Product } from '../types';
 
 interface ProductCardProps {
   product: Product;
   addToCart: (p: Product) => void;
+  quantity?: number;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product, addToCart }) => {
+export const ProductCard: React.FC<ProductCardProps> = ({ product, addToCart, quantity = 0 }) => {
   return (
     <motion.div
       whileHover={{ y: -8 }}
@@ -21,10 +22,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, addToCart }) 
           alt={product.name}
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
         />
-        <div className="absolute top-2 left-2">
+        <div className="absolute top-2 left-2 flex flex-col gap-1.5">
           <span className="px-2 py-0.5 bg-white/90 backdrop-blur-md text-accent text-[8px] font-bold uppercase tracking-wider rounded-md shadow-sm">
             {product.category}
           </span>
+          {quantity > 0 && (
+            <motion.span 
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="px-2 py-0.5 bg-primary text-white text-[8px] font-bold uppercase tracking-wider rounded-md shadow-lg shadow-primary/20 flex items-center space-x-1"
+            >
+              <ShoppingBag className="h-2 w-2" />
+              <span>{quantity} in Cart</span>
+            </motion.span>
+          )}
         </div>
         <div className="absolute top-2 right-2">
           <div className="flex items-center space-x-0.5 px-1.5 py-0.5 bg-white/90 backdrop-blur-md rounded-md shadow-sm">
@@ -35,9 +46,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, addToCart }) 
         
         <button 
           onClick={() => addToCart(product)}
-          className="absolute bottom-2 right-2 w-8 h-8 bg-primary text-white rounded-lg flex items-center justify-center shadow-lg shadow-primary/30 transform sm:translate-y-20 group-hover:translate-y-0 transition-transform duration-500 hover:scale-110"
+          className={`absolute bottom-2 right-2 w-8 h-8 rounded-lg flex items-center justify-center shadow-lg transform sm:translate-y-20 group-hover:translate-y-0 transition-all duration-500 hover:scale-110 ${quantity > 0 ? 'bg-accent text-white shadow-accent/20' : 'bg-primary text-white shadow-primary/30'}`}
         >
-          <Plus className="h-4 w-4" />
+          {quantity > 0 ? <Plus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
         </button>
       </div>
 

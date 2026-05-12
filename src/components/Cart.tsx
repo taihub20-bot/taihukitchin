@@ -25,7 +25,7 @@ export default function Cart({ items, updateQuantity, removeFromCart }: CartProp
         <h2 className="text-3xl font-serif font-bold text-accent mb-4 text-center">Your Cart is Empty</h2>
         <p className="text-accent/50 mb-8 max-w-xs text-center">Looks like you haven't added anything to your cart yet.</p>
         <button 
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/menu')}
           className="px-8 py-4 bg-primary text-white rounded-2xl font-bold hover:shadow-lg shadow-primary/20 transition-all flex items-center space-x-2"
         >
           <ArrowLeft className="h-5 w-5" />
@@ -88,7 +88,7 @@ export default function Cart({ items, updateQuantity, removeFromCart }: CartProp
           </AnimatePresence>
           
           <button 
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/menu')}
             className="w-full py-4 border-2 border-dashed border-accent/10 text-accent/40 rounded-3xl font-bold flex items-center justify-center space-x-2 hover:bg-accent/5 hover:border-accent/20 transition-all"
           >
             <Plus className="h-5 w-5" />

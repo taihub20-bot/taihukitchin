@@ -2,20 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Star, Minus, Plus, ShoppingBag, ArrowLeft, MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Product } from '../types';
+import { Product, CartItem } from '../types';
 
 interface ProductDetailProps {
   addToCart: (p: Product) => void;
+  cart: CartItem[];
 }
 
 import { dataService } from '../services/dataService';
 
-export default function ProductDetail({ addToCart }: ProductDetailProps) {
+export default function ProductDetail({ addToCart, cart }: ProductDetailProps) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'desc' | 'reviews'>('desc');
+
+  const cartItem = cart?.find(item => item.id === id);
+  const inCartQty = cartItem?.quantity || 0;
 
   useEffect(() => {
     dataService.getProducts()
@@ -62,6 +66,12 @@ export default function ProductDetail({ addToCart }: ProductDetailProps) {
           <div className="mb-8">
             <div className="flex items-center space-x-2 mb-4">
               <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest rounded-full">{product.category}</span>
+              {inCartQty > 0 && (
+                <span className="px-3 py-1 bg-accent text-white text-[10px] font-bold uppercase tracking-widest rounded-full flex items-center space-x-1">
+                  <ShoppingBag className="h-3 w-3" />
+                  <span>{inCartQty} in Cart</span>
+                </span>
+              )}
               <span className="text-accent/20">•</span>
               <div className="flex items-center space-x-1">
                 <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />

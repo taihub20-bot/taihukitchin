@@ -284,8 +284,8 @@ export default function App() {
         <main className="flex-grow pb-24 md:pb-0">
           <Routes>
             <Route path="/" element={<HomeOverview />} />
-            <Route path="/menu" element={<MenuSection addToCart={addToCart} searchQuery={searchQuery} />} />
-            <Route path="/product/:id" element={<ProductDetail addToCart={addToCart} />} />
+            <Route path="/menu" element={<MenuSection addToCart={addToCart} searchQuery={searchQuery} cart={cart} />} />
+            <Route path="/product/:id" element={<ProductDetail addToCart={addToCart} cart={cart} />} />
             <Route path="/cart" element={<Cart items={cart} updateQuantity={updateQuantity} removeFromCart={removeFromCart} />} />
             <Route path="/checkout" element={<Checkout items={cart} clearCart={() => setCart([])} />} />
             <Route path="/track" element={<OrderTracking />} />
@@ -429,7 +429,7 @@ function HomeOverview() {
   );
 }
 
-function MenuSection({ addToCart, searchQuery }: { addToCart: (p: Product) => void, searchQuery: string }) {
+function MenuSection({ addToCart, searchQuery, cart }: { addToCart: (p: Product) => void, searchQuery: string, cart: CartItem[] }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [loading, setLoading] = useState(true);
@@ -505,26 +505,23 @@ function MenuSection({ addToCart, searchQuery }: { addToCart: (p: Product) => vo
             >
               Retry Connection
             </button>
-            {window.location.hostname.includes('netlify.app') && (
-              <div className="mt-8 p-6 bg-blue-50/50 rounded-3xl border border-blue-100 text-left">
-                <h4 className="text-blue-700 font-bold text-xs mb-2 uppercase tracking-widest">Netlify Guide</h4>
-                <p className="text-blue-600/70 text-[10px] leading-relaxed">
-                  Apka menu is se liyei nhi load ho raha kyu ki Netlify mei database connect nhi hei. <br/>
-                  1. Supabase mei account banaye.<br/>
-                  2. <b>setup_supabase.sql</b> run krein table banane k liyei.<br/>
-                  3. Netlify environment variables mei <b>VITE_SUPABASE_URL</b> or <b>VITE_SUPABASE_ANON_KEY</b> add krein.
-                </p>
-              </div>
-            )}
           </div>
         ) : (
-          <motion.div 
+            <motion.div 
             layout
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
           >
-            {filteredProducts.map(product => (
-              <ProductCard key={product.id} product={product} addToCart={addToCart} />
-            ))}
+            {filteredProducts.map(product => {
+              const cartItem = cart.find(item => item.id === product.id);
+              return (
+                <ProductCard 
+                  key={product.id} 
+                  product={product} 
+                  addToCart={addToCart} 
+                  quantity={cartItem?.quantity || 0}
+                />
+              );
+            })}
           </motion.div>
         )}
       </AnimatePresence>

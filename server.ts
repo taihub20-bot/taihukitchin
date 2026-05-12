@@ -138,6 +138,24 @@ async function startServer() {
     }
   });
 
+  app.post("/api/change-password", (req, res) => {
+    const { userId, oldPassword, newPassword } = req.body;
+    const data = getData();
+    const user = data.users.find((u: any) => u.id === userId);
+    
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    if (user.password !== oldPassword) {
+      return res.status(401).json({ error: "Incorrect old password" });
+    }
+    
+    user.password = newPassword;
+    saveData(data);
+    res.json({ success: true });
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
